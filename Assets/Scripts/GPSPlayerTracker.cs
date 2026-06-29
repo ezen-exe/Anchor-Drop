@@ -1,5 +1,8 @@
 using UnityEngine;
 using System.Collections;
+#if PLATFORM_ANDROID
+using UnityEngine.Android;
+#endif
 
 public class GPSPlayerTracker : MonoBehaviour
 {
@@ -22,16 +25,38 @@ public class GPSPlayerTracker : MonoBehaviour
 
     IEnumerator StartLocationService()
     {
-        if (!useFakeLocation)
+        // 1. Request Permission if on Android
+#if PLATFORM_ANDROID
+        if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
         {
-            if (!Input.location.isEnabledByUser) yield break;
-            Input.location.Start();
-            int maxWait = 20;
-            while (Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
-            {
-                yield return new WaitForSeconds(1);
-                maxWait--;
-            }
+            Permission.RequestUserPermission(Permission.FineLocation);
+            // Wait a few frames for the user to click "Allow"
+            yield return new WaitForSeconds(1f);
+        }
+#endif
+
+        // 2. Check if the user has enabled Location Services in the phone settings
+        if (!Input.location.isEnabledByUser)
+        {
+            Debug.Log("User has not enabled location services in settings.");
+            yield break;
+        }
+
+        // 3. Start the location service
+        Input.location.Start();
+
+        // 4. Wait for initialization
+        int maxWait = 20;
+        while (Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
+        {
+            yield return new WaitForSeconds(1);
+            maxWait--;
+        }
+
+        if (maxWait < 1)
+        {
+            Debug.Log("Timed out waiting for GPS.");
+            yield break;
         }
     }
 
@@ -51,8 +76,7 @@ public class GPSPlayerTracker : MonoBehaviour
         }
 
         Vector3 targetPos = LatLonToMeters(currentLat, currentLon) - originOffset;
-        // Instead of jumping instantly to the position:
-        transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * 5f);
+        transform.position = Vector3.Lerp(transform.position, new Vector3(targetPos.x, 1f, targetPos.z), Time.deltaTime * 5f);
     }
 
     Vector3 LatLonToMeters(float lat, float lon)

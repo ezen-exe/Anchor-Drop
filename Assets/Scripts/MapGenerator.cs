@@ -22,14 +22,21 @@ public class MapGenerator : MonoBehaviour
 
     private Vector3 originOffset;
 
+#if UNITY_EDITOR
     // This runs when you change values in the Inspector
     void OnValidate()
     {
-        if (Application.isEditor && !Application.isPlaying)
+        if (Application.isPlaying) return;
+        
+        // Unity restricts destroying/creating objects directly in OnValidate (causing those yellow errors).
+        // delayCall safely waits for the inspector to finish before generating the map.
+        UnityEditor.EditorApplication.delayCall += () =>
         {
+            if (this == null) return; // Prevent errors if script is deleted
             Generate();
-        }
+        };
     }
+#endif
 
     // This runs when the game starts
     void Start()
@@ -39,12 +46,16 @@ public class MapGenerator : MonoBehaviour
 
     void Generate()
     {
-        // 1. Clean up old map
-        Transform existingMap = transform.Find("Campus_Map");
-        if (existingMap != null)
+        // 1. Clean up ALL old maps (Fixes the overlapping text slider issue)
+        // We loop backwards to safely delete multiple children at once
+        for (int i = transform.childCount - 1; i >= 0; i--)
         {
-            if (Application.isPlaying) Destroy(existingMap.gameObject);
-            else DestroyImmediate(existingMap.gameObject);
+            Transform child = transform.GetChild(i);
+            if (child.name == "Campus_Map")
+            {
+                if (Application.isPlaying) Destroy(child.gameObject);
+                else DestroyImmediate(child.gameObject);
+            }
         }
 
         // 2. Generate new map
